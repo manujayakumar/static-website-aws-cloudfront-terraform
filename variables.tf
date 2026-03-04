@@ -8,3 +8,9 @@ variable "bucket_name" {
   description = "Name of the bucket resource"
   type        = string
 }
+
+variable "environment" {
+  description = "name of the environment"
+  type        = string
+  default     = "dev"
+}

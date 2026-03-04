@@ -1,5 +1,10 @@
 resource "aws_s3_bucket" "website" {
   bucket = var.bucket_name
+
+  tags = {
+    Name        = "website bucket"
+    Environment = var.environment
+  }
 }
 
 # Make S3 bucket private
@@ -51,8 +56,8 @@ resource "aws_s3_object" "website_files" {
 
   bucket = aws_s3_bucket.website.id
   key    = each.value
-  source = "${path.module}/www/${each.value}"
-  etag   = filemd5("${path.module}/www/${each.value}")
+  source = "${path.module}/website/${each.value}"
+  etag   = filemd5("${path.module}/website/${each.value}")
   content_type = lookup({
     "html" = "text/html",
     "css"  = "text/css",
@@ -66,4 +71,52 @@ resource "aws_s3_object" "website_files" {
     "ico"  = "image/x-icon",
     "txt"  = "text/plain"
   }, split(".", each.value)[length(split(".", each.value)) - 1], "application/octet-stream")
+}
+
+resource "aws_cloudfront_distribution" "s3_distribution" {
+  origin {
+    domain_name              = aws_s3_bucket.website.bucket_regional_domain_name
+    origin_access_control_id = aws_cloudfront_origin_access_control.oac.id
+    origin_id                = local.s3_origin_id
+  }
+
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "Some comment"
+  default_root_object = "index.html"
+
+  default_cache_behavior {
+    allowed_methods  = ["GET", "HEAD"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = local.s3_origin_id
+
+    forwarded_values {
+      query_string = false
+
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    min_ttl                = 0
+    default_ttl            = 3600
+    max_ttl                = 86400
+  }
+
+  price_class = "PriceClass_100"
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  tags = {
+    Environment = var.environment
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
 }
